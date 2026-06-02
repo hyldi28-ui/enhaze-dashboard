@@ -326,6 +326,42 @@
   .ev-table .ev-name { font-weight: 600; color: #111; }
   .ev-table .ev-note { color: #888; }
 
+  /* ── Pivot table ── */
+  .pivot-wrap { overflow-x: auto; }
+  .pivot-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .pivot-table th {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.8px; color: #bbb;
+    padding: 8px 14px; border-bottom: 1px solid #f0f0f0; text-align: right; white-space: nowrap;
+  }
+  .pivot-table th:first-child { text-align: left; }
+  .pivot-table th.naver   { color: #15803d; }
+  .pivot-table th.kakao   { color: #92400e; }
+  .pivot-table th.coupang { color: #b91c1c; }
+  .pivot-table td {
+    padding: 9px 14px; border-bottom: 1px solid #f8f8f8;
+    text-align: right; cursor: default; white-space: nowrap;
+  }
+  .pivot-table tr:last-child td { border-bottom: none; }
+  .pivot-table tr:hover td { background: #fafafa; }
+  .pivot-table td:first-child { text-align: left; color: #777; font-size: 11px; }
+  .pivot-table td.c-naver   { color: #15803d; }
+  .pivot-table td.c-kakao   { color: #92400e; }
+  .pivot-table td.c-coupang { color: #b91c1c; }
+  .pivot-table td.c-total   { font-weight: 700; color: #111; }
+  .pivot-table td.c-empty   { color: #ddd; }
+
+  /* ── Daily chart (horizontal) ── */
+  .dh-list { display: flex; flex-direction: column; gap: 7px; }
+  .dh-row  { display: grid; grid-template-columns: 44px 1fr 46px; align-items: center; gap: 8px; }
+  .dh-date { font-size: 11px; color: #888; text-align: right; white-space: nowrap; }
+  .dh-track { height: 14px; background: #f0f0f0; border-radius: 2px; overflow: hidden; display: flex; }
+  .dh-seg  { height: 100%; cursor: default; transition: opacity .1s; }
+  .dh-seg:hover { opacity: .75; }
+  .dh-amt  { font-size: 10px; color: #888; white-space: nowrap; }
+  .daily-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .dl-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #666; }
+  .dl-dot { width: 8px; height: 8px; border-radius: 1px; flex-shrink: 0; }
+
   /* ── Sub-tabs ── */
   .sub-tabs {
     display: flex; border-bottom: 1px solid #e0e0e0; margin-bottom: 14px;
@@ -463,6 +499,15 @@
       <span class="filter-status" id="filter-status"></span>
     </div>
 
+    <!-- Platform monthly pivot (fixed) -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-ttl" id="pivot-toggle" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between">
+        <span>플랫폼별 월별 매출 <span class="badge">전체 기간 고정</span></span>
+        <span id="pivot-toggle-icon" style="font-size:11px;color:#aaa;font-weight:400">▼ 펼치기</span>
+      </div>
+      <div class="pivot-wrap" id="pivot-collapse" style="display:none"><div id="pivot-table-wrap"></div></div>
+    </div>
+
     <!-- KPI -->
     <div class="kpi-row">
       <div class="kpi dark">
@@ -514,6 +559,24 @@
           <span class="badge">단위: 개</span>
         </div>
         <div class="hbar-list" id="product-qty-chart"></div>
+      </div>
+    </div>
+
+    <!-- Daily charts -->
+    <div class="row2" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-ttl">플랫폼별 일일매출 현황 <span class="badge">주문금액 기준</span></div>
+        <div class="daily-legend">
+          <span class="dl-item"><span class="dl-dot" style="background:#03c75a"></span>네이버</span>
+          <span class="dl-item"><span class="dl-dot" style="background:#f9e000"></span>카카오</span>
+          <span class="dl-item"><span class="dl-dot" style="background:#e11726"></span>쿠팡</span>
+        </div>
+        <div class="dh-list" id="daily-pl-chart"></div>
+      </div>
+      <div class="card">
+        <div class="card-ttl">상품별 일일매출 현황 <span class="badge">TOP 5</span></div>
+        <div class="daily-legend" id="daily-pr-legend"></div>
+        <div class="dh-list" id="daily-pr-chart"></div>
       </div>
     </div>
 
@@ -727,6 +790,34 @@ function initDashboard(updatedAt) {
   });
   document.getElementById('product-qty-chart').addEventListener('mouseleave', () => tip.classList.remove('show'));
 
+  // daily chart tooltips
+  document.getElementById('daily-pl-chart').addEventListener('mouseover', e => {
+    const seg = e.target.closest('.dh-seg');
+    if (!seg) { tip.classList.remove('show'); return; }
+    tip.innerHTML = `<strong>${seg.dataset.lbl}</strong><br><span class="tip-lbl">주문금액</span> ${fmtWon(+seg.dataset.amt)}`;
+    tip.classList.add('show');
+  });
+  document.getElementById('daily-pl-chart').addEventListener('mousemove', e => {
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top  = (e.clientY - 10) + 'px';
+  });
+  document.getElementById('daily-pl-chart').addEventListener('mouseleave', () => tip.classList.remove('show'));
+
+  document.getElementById('daily-pr-chart').addEventListener('mouseover', e => {
+    const seg = e.target.closest('.dh-seg');
+    if (!seg) { tip.classList.remove('show'); return; }
+    tip.innerHTML =
+      `<strong>${seg.dataset.lbl}</strong><br>` +
+      `<span class="tip-lbl">주문금액</span> ${fmtWon(+seg.dataset.amt)}<br>` +
+      `<span class="tip-lbl">판매 수량</span> ${fmtN(+seg.dataset.qt)}개`;
+    tip.classList.add('show');
+  });
+  document.getElementById('daily-pr-chart').addEventListener('mousemove', e => {
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top  = (e.clientY - 10) + 'px';
+  });
+  document.getElementById('daily-pr-chart').addEventListener('mouseleave', () => tip.classList.remove('show'));
+
   const dot = document.getElementById('status-dot');
   dot.className = 'live-dot';
   document.getElementById('status-text').innerHTML = `최종 갱신 <strong>${updatedAt || '—'}</strong>`;
@@ -755,6 +846,33 @@ function initDashboard(updatedAt) {
     tip.style.top  = (rect.bottom + 6) + 'px';
   });
   calGrid.addEventListener('mouseleave', () => tip.classList.remove('show'));
+
+  // Pivot toggle
+  document.getElementById('pivot-toggle').addEventListener('click', () => {
+    const el   = document.getElementById('pivot-collapse');
+    const icon = document.getElementById('pivot-toggle-icon');
+    const open = el.style.display !== 'none';
+    el.style.display = open ? 'none' : '';
+    icon.textContent = open ? '▼ 펼치기' : '▲ 접기';
+  });
+
+  // Pivot table tooltip
+  const pivotWrap = document.getElementById('pivot-table-wrap');
+  pivotWrap.addEventListener('mouseover', e => {
+    const td = e.target.closest('td[data-am]');
+    if (!td || !+td.dataset.am) { tip.classList.remove('show'); return; }
+    tip.innerHTML =
+      `<span class="tip-lbl">판매 수량</span> ${fmtN(+td.dataset.qt)}개<br>` +
+      `<span class="tip-lbl">객단가</span> ${fmtWon(+td.dataset.dan)}`;
+    tip.classList.add('show');
+  });
+  pivotWrap.addEventListener('mousemove', e => {
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top  = (e.clientY - 10) + 'px';
+  });
+  pivotWrap.addEventListener('mouseleave', () => tip.classList.remove('show'));
+
+  renderPivot();
 
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('dashboard').style.display      = 'block';
@@ -879,9 +997,38 @@ function compute(rows) {
   const topProducts    = [...prodList].sort((a,b) => b.am-a.am).slice(0, 10);
   const topProductsQty = [...prodList].sort((a,b) => b.qt-a.qt).slice(0, 10);
 
+  // Daily by platform & product
+  const dailyPlMap = {}, dailyPrMap = {};
+  rows.forEach(r => {
+    if (!dailyPlMap[r.d]) dailyPlMap[r.d] = {};
+    dailyPlMap[r.d][r.pl] = (dailyPlMap[r.d][r.pl] || 0) + r.am;
+    const key = normalizeProduct(r.pr);
+    if (key) {
+      if (!dailyPrMap[r.d]) dailyPrMap[r.d] = {};
+      if (!dailyPrMap[r.d][key]) dailyPrMap[r.d][key] = {am:0, qt:0};
+      dailyPrMap[r.d][key].am += r.am;
+      dailyPrMap[r.d][key].qt += r.qt;
+    }
+  });
+  const allDates = [...new Set([...Object.keys(dailyPlMap), ...Object.keys(dailyPrMap)])].sort();
+  const dailyPlList = allDates.map(d => ({
+    d, pl: dailyPlMap[d] || {},
+    total: Object.values(dailyPlMap[d] || {}).reduce((a,b) => a+b, 0)
+  }));
+  const prodTotals2 = {};
+  Object.values(dailyPrMap).forEach(day =>
+    Object.entries(day).forEach(([p,v]) => { prodTotals2[p] = (prodTotals2[p]||0)+v.am; })
+  );
+  const top5Pr = Object.entries(prodTotals2).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>e[0]);
+  const dailyPrList = allDates.map(d => ({
+    d, pr: dailyPrMap[d] || {},
+    total: top5Pr.reduce((s,p) => s+((dailyPrMap[d]||{})[p]?.am||0), 0)
+  }));
+
   return {
     months, rowCount:rows.length, totalAm, totalQt, totalCnt,
-    dayCount, monthly, plList, topProducts, topProductsQty, skuCount: skus.size
+    dayCount, monthly, plList, topProducts, topProductsQty, skuCount: skus.size,
+    dailyPlList, dailyPrList, top5Pr
   };
 }
 
@@ -949,6 +1096,49 @@ function render(c) {
     }).join('');
   }
 
+  /* Daily Platform */
+  const PL_COLORS_D = {'네이버':'#03c75a','카카오':'#f9e000','쿠팡':'#e11726'};
+  const PLATFORMS_D = ['네이버','카카오','쿠팡'];
+  const maxDPl = Math.max(...c.dailyPlList.map(d=>d.total), 1);
+  document.getElementById('daily-pl-chart').innerHTML = c.dailyPlList.length === 0
+    ? '<div class="empty-msg">조회 결과 없음</div>'
+    : [...c.dailyPlList].reverse().map(day => {
+        const segs = PLATFORMS_D.map(pl => {
+          const amt = day.pl[pl]||0;
+          if (!amt) return '';
+          const w = (amt/maxDPl*100).toFixed(1);
+          return `<div class="dh-seg" style="width:${w}%;background:${PL_COLORS_D[pl]}" data-lbl="${pl}" data-amt="${amt}"></div>`;
+        }).join('');
+        return `<div class="dh-row">
+          <div class="dh-date">${day.d.slice(5).replace('-','/')}</div>
+          <div class="dh-track">${segs}</div>
+          <div class="dh-amt">${day.total>0?Math.round(day.total/10000)+'만':'—'}</div>
+        </div>`;
+      }).join('');
+
+  /* Daily Product */
+  const PR_COLORS = ['#111','#4b7bec','#f7b731','#20bf6b','#a55eea'];
+  const maxDPr = Math.max(...c.dailyPrList.map(d=>d.total), 1);
+  document.getElementById('daily-pr-legend').innerHTML = c.top5Pr.map((p,i) =>
+    `<span class="dl-item"><span class="dl-dot" style="background:${PR_COLORS[i]}"></span>${p}</span>`
+  ).join('');
+  document.getElementById('daily-pr-chart').innerHTML = c.dailyPrList.length === 0
+    ? '<div class="empty-msg">조회 결과 없음</div>'
+    : [...c.dailyPrList].reverse().map(day => {
+        const segs = c.top5Pr.map((p,i) => {
+          const v = day.pr[p];
+          const amt = v ? v.am : 0, qt = v ? v.qt : 0;
+          if (!amt) return '';
+          const w = (amt/maxDPr*100).toFixed(1);
+          return `<div class="dh-seg" style="width:${w}%;background:${PR_COLORS[i]}" data-lbl="${p}" data-amt="${amt}" data-qt="${qt}"></div>`;
+        }).join('');
+        return `<div class="dh-row">
+          <div class="dh-date">${day.d.slice(5).replace('-','/')}</div>
+          <div class="dh-track">${segs}</div>
+          <div class="dh-amt">${day.total>0?Math.round(day.total/10000)+'만':'—'}</div>
+        </div>`;
+      }).join('');
+
   /* Product Qty TOP 10 */
   if (c.topProductsQty.length === 0) {
     document.getElementById('product-qty-chart').innerHTML = '<div class="empty-msg">조회 결과 없음</div>';
@@ -967,6 +1157,55 @@ function render(c) {
 }
 
 function update() { render(compute(getFiltered())); }
+
+/* ── pivot table (fixed, uses full TX) ── */
+function renderPivot() {
+  const months    = [...new Set(TX.map(r => r.d.substring(0,7)))].sort();
+  const platforms = ['네이버','카카오','쿠팡'];
+  const CLS = {'네이버':'c-naver','카카오':'c-kakao','쿠팡':'c-coupang','합계':'c-total'};
+  const TH  = {'네이버':'naver',  '카카오':'kakao',  '쿠팡':'coupang'};
+
+  const pivot = {};
+  months.forEach(m => {
+    pivot[m] = {};
+    [...platforms,'합계'].forEach(k => { pivot[m][k] = {am:0, qt:0, cnt:0}; });
+  });
+  TX.forEach(r => {
+    const m = r.d.substring(0,7);
+    if (!pivot[m]) return;
+    if (pivot[m][r.pl]) {
+      pivot[m][r.pl].am  += r.am;
+      pivot[m][r.pl].qt  += r.qt;
+      pivot[m][r.pl].cnt += 1;
+    }
+    pivot[m]['합계'].am  += r.am;
+    pivot[m]['합계'].qt  += r.qt;
+    pivot[m]['합계'].cnt += 1;
+  });
+
+  const allCols = [...platforms, '합계'];
+  let html = `<table class="pivot-table"><thead><tr>
+    <th>월</th>
+    ${allCols.map(pl => `<th class="${TH[pl]||''}">${pl}</th>`).join('')}
+  </tr></thead><tbody>`;
+
+  [...months].reverse().forEach(m => {
+    const label = m.replace(/(\d{4})-(\d{2})/, (_, y, mo) => `${y}년 ${+mo}월`);
+    html += `<tr><td>${label}</td>`;
+    allCols.forEach(pl => {
+      const c = pivot[m][pl];
+      const cls = c.am > 0 ? CLS[pl] : 'c-empty';
+      const dan = c.cnt > 0 ? Math.round(c.am / c.cnt) : 0;
+      html += `<td class="${cls}" data-am="${c.am}" data-qt="${c.qt}" data-cnt="${c.cnt}" data-dan="${dan}">
+        ${c.am > 0 ? fmtAm(c.am) : '—'}
+      </td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('pivot-table-wrap').innerHTML = html;
+}
 
 /* ── tab ── */
 function switchTab(tab) {
